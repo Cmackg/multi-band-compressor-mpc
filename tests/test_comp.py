@@ -247,12 +247,18 @@ want = 6 - gr_of(0, 4)
 check("curve: the 1 kHz column shows band 3's net gain", abs(curve_db[col(1000)] - want) < 0.8,
       "%.1f dB (INPUT +6 minus %.1f dB = %.1f)" % (curve_db[col(1000)], gr_of(0, 4), want))
 check("curve: a 25 Hz column (band 1, off) stays at 0 dB", abs(curve_db[col(25)]) < 0.7, "%.1f dB" % curve_db[col(25)])
+b3 = [curve_db[c] for c in range(72) if 100 * 1.02 < 20 * 1000 ** ((c + 0.5) / 72) < 8000 / 1.02]
+check("curve: flat across band 3's whole range (100 Hz - 8 kHz), as in Multipressor", max(b3) - min(b3) < 0.01,
+      "%d columns, %.1f .. %.1f dB" % (len(b3), min(b3), max(b3)))
+c_lo, c_hi = curve_db[col(90)], curve_db[col(110)]
+check("curve: steps at the crossover (100 Hz): band 2 at 0 dB, band 3 compressed", abs(c_lo) < 0.7 and c_hi < -5,
+      "90 Hz %.1f dB, 110 Hz %.1f dB" % (c_lo, c_hi))
 _, _, info = run(tone(1000, -40, 1.0), **band(2, out=6))
 c = [v / 60 * 36 - 18 for v in info["curve"]][col(200)]
 check("curve: band 2's OUTPUT +6 dB lifts its columns", abs(c - 6) < 1.0, "%.1f dB" % c)
 _, _, info = run(tone(1000, -40, 0.5), x1=hz_pos(100), x2=hz_pos(400), x3=hz_pos(1600), x4=hz_pos(6000))
 cols = [col(hz) + 1 for hz in (100, 400, 1600, 6000)]
-check("dashed crossover lines sit on their frequencies", all(abs(a - b) <= 1 for a, b in zip(info["xm"], cols)),
+check("crossover lines sit on their frequencies", all(abs(a - b) <= 1 for a, b in zip(info["xm"], cols)),
       "%s vs %s" % (info["xm"], cols))
 _, _, info = run(tone(1000, -12, 1.0), analyzer=1, **only())
 lvl = info["bars"][col(1000)] * 2.5 - 60

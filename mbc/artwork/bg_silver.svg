@@ -80,7 +80,7 @@
 <path d="M1048.9 70V270" stroke="#fff" stroke-opacity=".03"/>
 <path d="M1071.2 70V270" stroke="#fff" stroke-opacity=".03"/>
 <path d="M1090.8 70V270" stroke="#fff" stroke-opacity=".03"/>
-<text x="1224" y="305" text-anchor="end" dominant-baseline="central" style="font-family:'Titillium Web',sans-serif;font-weight:600;font-size:11px;letter-spacing:1.5px" fill="#5d6876">DRAG A DASHED LINE SIDEWAYS TO MOVE A CROSSOVER</text>
+<text x="1224" y="299" text-anchor="end" dominant-baseline="central" style="font-family:'Titillium Web',sans-serif;font-weight:600;font-size:11px;letter-spacing:1.5px" fill="#5d6876">DRAG A CROSSOVER LINE SIDEWAYS TO MOVE IT</text>
 <rect x="22" y="68" width="1236" height="120" rx="8" fill="url(#glass)" opacity=".35"/>
 <path d="M26 320H253A8 8 0 0 1 261 328V614A8 8 0 0 1 253 622H26A8 8 0 0 1 18 614V328A8 8 0 0 1 26 320Z" fill="url(#pnl)" filter="url(#drop)"/><path d="M26 320H253A8 8 0 0 1 261 328V614A8 8 0 0 1 253 622H26A8 8 0 0 1 18 614V328A8 8 0 0 1 26 320Z" fill="url(#gloss)" opacity=".6"/><path d="M26 320H253A8 8 0 0 1 261 328V614A8 8 0 0 1 253 622H26A8 8 0 0 1 18 614V328A8 8 0 0 1 26 320Z" fill="none" stroke="url(#bevel)" stroke-width="2"/><path d="M26 320H253A8 8 0 0 1 261 328V614A8 8 0 0 1 253 622H26A8 8 0 0 1 18 614V328A8 8 0 0 1 26 320Z" fill="none" stroke="#8b939c"/>
 <path d="M32 321H247" stroke="#ff5a5f" stroke-width="3" stroke-linecap="round" opacity=".9"/>

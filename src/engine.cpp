@@ -23,9 +23,9 @@
  * and the gain reduction smoothed in the log domain by the "smooth decoupled" peak detector (release, then attack;
  * Giannoulis, Massberg & Reiss, JAES 2012). log2 / exp2 are fast polynomial approximations (under 0.01 dB).
  *
- * Screen (as Shapey): the curve's 72 columns show each frequency's net gain right now (INPUT + OUTPUT minus the gain
- * reduction, through the crossover), so you watch the compression happen across the spectrum, over the analyzer haze of
- * the sound after it. A dashed line marks each crossover: touch the graph and drag sideways to move the nearest one. Each
+ * Screen (as Shapey, drawn like Logic's Multipressor): each band is a flat line across its own range at its gain right now
+ * (INPUT + OUTPUT minus the gain reduction), stepping at the crossovers, filled from 0 dB: red where the band is pulled
+ * down (compressed), green where it is raised. Behind it, the analyzer haze of the sound after the plugin. A line marks each crossover: touch the graph and drag sideways to move the nearest one. Each
  * band's column has a gain-reduction meter. All of it reaches the screen through the wrapper's display_rev poll, run on
  * the wrapper's own reporter thread (DISPLAY_REV_THREAD), not the audio thread.
  *
@@ -167,13 +167,13 @@ struct Comp {
     bool started = false;                      /* the first block takes fades at their targets (no fade-in on load) */
     /* the screen */
     int col[NCOL];
-    float wcol[NCOL][NB];                      /* each band's share of each column (from the crossover magnitudes) */
+    float wcol[NCOL][NB];                      /* which band each column shows (1 for that band, 0 for the rest) */
     unsigned display_rev = 0;
     int curve_dirty = 1, curve_wait = 0;
     double last_step = -1.0;
     int theme_changed = 0;
     int sel = DEF_SEL, sel_changed = 0, pend_sel = -1;
-    int xmark[NX];                             /* each crossover's dashed line on the graph: its column + 1 */
+    int xmark[NX];                             /* each crossover's line on the graph: its column + 1 */
     int grm[NB];                               /* each band's gain-reduction meter frame */
     int touch = 0, touch_hold = 0;
     int drag_x = -1;                           /* the crossover a finger on the graph is moving (-1: none) */
@@ -228,22 +228,18 @@ static void xover_glide(Comp *p, float k)
     }
 }
 
-/* each band's share of each curve column: the LR4 magnitudes |LP| = 1 / (1 + (f/fc)^4), |HP| = 1 - |LP|, along the tree */
+/* which band each curve column shows: the one whose range (between its crossovers) holds the column's frequency. The
+ * display is drawn per band, as a multiband compressor's usually is (Logic's Multipressor): one flat level across each
+ * band, stepping at the crossovers, rather than the crossovers' smooth blend */
 static void update_weights(Comp *p)
 {
     float e[NX];
     x_effective(p, e);
     for (int c = 0; c < NCOL; ++c) {
-        float hz = F_LO * powf(F_HI / F_LO, (c + 0.5f) / NCOL), rest = 1.0f, sum = 0.0f;
-        float w[NB];
-        for (int k = 0; k < NX; ++k) {
-            float r = hz / pos_to_hz(e[k]), lp = 1.0f / (1.0f + r * r * r * r);
-            w[k] = rest * lp;
-            rest *= 1.0f - lp;
-        }
-        w[NB - 1] = rest;
-        for (int b = 0; b < NB; ++b) sum += w[b];
-        for (int b = 0; b < NB; ++b) p->wcol[c][b] = w[b] / sum;
+        float pos = 1000.0f * (c + 0.5f) / NCOL;
+        int band = 0;
+        while (band < NX && pos >= e[band]) ++band;
+        for (int b = 0; b < NB; ++b) p->wcol[c][b] = b == band ? 1.0f : 0.0f;
     }
 }
 

@@ -336,7 +336,7 @@ def background(slug, t):
     for hz in (30, 40, 60, 70, 80, 90, 300, 400, 600, 700, 800, 900, 3000, 4000, 6000, 7000, 8000, 9000):
         x = plot_x(hz)
         o.append('<path d="M%.1f %dV%d" stroke="#fff" stroke-opacity=".03"/>' % (x, PLOT_Y, PLOT_Y + PLOT_H))
-    o.append(text(x1, PLOT_Y + PLOT_H + 29, "DRAG A DASHED LINE SIDEWAYS TO MOVE A CROSSOVER", 11, "#5d6876", anchor="end", spacing=1.5))
+    o.append(text(x1, PLOT_Y + PLOT_H + 29, "DRAG A CROSSOVER LINE SIDEWAYS TO MOVE IT", 11, "#5d6876", anchor="end", spacing=1.5))
     o.append('<rect x="%d" y="%d" width="%d" height="%d" rx="8" fill="url(#glass)" opacity=".35"/>' % (gx + 6, gy + 6, gw - 12, (gh - 12) // 2))
 
     # band columns: a panel each, its colour along the top; the meter's slot, label and scale
@@ -485,33 +485,41 @@ def touch_glow_svg():
 
 
 def xline_svg(k):
-    """crossover k's line on the graph: dashed, with its number in a little tag at the top"""
+    """crossover k's line on the graph: a solid line through the whole display (as Multipressor's band dividers), with
+    its number in a little tag at the top"""
     w, h = 28, PLOT_H
     c = w / 2
-    return ('<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d"><path d="M%g 16V%d" stroke="#ffffff" stroke-width="1.6" '
-            'stroke-dasharray="6 4" opacity=".7"/><rect x="%g" y="1" width="18" height="15" rx="4" fill="#ffffff" opacity=".85"/>'
+    return ('<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d"><path d="M%g 16V%d" stroke="#ffffff" stroke-width="2" '
+            'opacity=".75"/><rect x="%g" y="1" width="18" height="15" rx="4" fill="#ffffff" opacity=".9"/>'
             '<text x="%g" y="9" text-anchor="middle" dominant-baseline="central" style="%s;font-weight:700;font-size:12px" fill="#0b0e13">%d</text></svg>') % (
         w, h, c, h, c - 9, c, TF, k)
 
 
+GAIN_UP, GAIN_DOWN = "#46e08c", "#ff6a3d"               # the curve's fill: raised (green), compressed / pulled down (red)
+
+
 def column_strip_svg():
-    """the curve, one column (Shapey's): CURVE_STEPS + 1 frames, the column's net gain as a bright cap over a soft fill"""
+    """the gain display, one column: CURVE_STEPS + 1 frames. Frame k: a bright flat line at the band's gain, filled from
+    0 dB: green when the band is raised, red when it is pulled down (compressed), as Logic's Multipressor shows its bands.
+    Side by side, a band's columns make one flat bar across its range"""
     w, h = COL_W, PLOT_H
     n = CURVE_STEPS + 1
     o = ['<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d"><defs>'
-         '<linearGradient id="up" x2="0" y2="1"><stop stop-color="%s" stop-opacity=".34"/><stop offset="1" stop-color="%s" stop-opacity=".06"/></linearGradient>'
-         '<linearGradient id="dn" x2="0" y2="1"><stop stop-color="%s" stop-opacity=".06"/><stop offset="1" stop-color="%s" stop-opacity=".34"/></linearGradient>'
+         '<linearGradient id="up" x2="0" y2="1"><stop stop-color="%s" stop-opacity=".62"/><stop offset="1" stop-color="%s" stop-opacity=".18"/></linearGradient>'
+         '<linearGradient id="dn" x2="0" y2="1"><stop stop-color="%s" stop-opacity=".18"/><stop offset="1" stop-color="%s" stop-opacity=".62"/></linearGradient>'
          '<filter id="g" x="-50%%" y="-200%%" width="200%%" height="500%%"><feGaussianBlur stdDeviation="2"/></filter></defs>' % (
-             w, h * n, CURVE, CURVE, CURVE, CURVE)]
+             w, h * n, GAIN_UP, GAIN_UP, GAIN_DOWN, GAIN_DOWN)]
     y0 = h / 2
     for k in range(n):
         top = k * h
         y = top + 2.5 + (h - 5) * (1 - k / CURVE_STEPS)
         a, b = sorted((top + y0, y))
+        up = y < top + y0
         if b - a > .5:
-            o.append('<rect x="0" y="%.2f" width="%d" height="%.2f" fill="url(#%s)"/>' % (a, w, b - a, "up" if y < top + y0 else "dn"))
-        o.append('<rect x="-1" y="%.2f" width="%d" height="4" fill="%s" opacity=".55" filter="url(#g)"/>' % (y - 2, w + 2, CURVE))
-        o.append('<rect x="-.5" y="%.2f" width="%g" height="2.6" rx="1" fill="%s"/>' % (y - 1.3, w + 1, CURVE))
+            o.append('<rect x="0" y="%.2f" width="%d" height="%.2f" fill="url(#%s)"/>' % (a, w, b - a, "up" if up else "dn"))
+        ink = CURVE if abs(y - (top + y0)) < 1 else (GAIN_UP if up else GAIN_DOWN)
+        o.append('<rect x="-1" y="%.2f" width="%d" height="4" fill="%s" opacity=".6" filter="url(#g)"/>' % (y - 2, w + 2, ink))
+        o.append('<rect x="-.5" y="%.2f" width="%g" height="2.6" fill="%s"/>' % (y - 1.3, w + 1, CURVE))
     o.append("</svg>")
     return "".join(o), w, h * n
 
@@ -547,12 +555,12 @@ def layout():
     for c in range(NCOL):
         L.append('button cx=%d cy=%d w=%d h=%d key=noop label="" img=images/touch_glow.png img_on=images/touch_glow.png when=touch:%d' % (
             PLOT_X + c * COL_W + COL_W // 2, PLOT_Y + PLOT_H // 2 + Y, TOUCH_W, PLOT_H, c + 1))
-    L += ["", "# each crossover's dashed line, at its frequency (the engine's xm_<k> picks the column)"]
+    L += ["", "# each crossover's line, at its frequency (the engine's xm_<k> picks the column)"]
     for k in range(NX):
         for c in range(NCOL):
             L.append('button cx=%d cy=%d w=28 h=%d key=noop label="" img=images/xline_%d.png img_on=images/xline_%d.png when=xm_%d:%d' % (
                 PLOT_X + c * COL_W + COL_W // 2, PLOT_Y + PLOT_H // 2 + Y, PLOT_H, k + 1, k + 1, k + 1, c + 1))
-    L += ["", "# the curve: 72 columns, each a filmstrip following the engine's c<n> (net gain right now). A touch moves the",
+    L += ["", "# the gain display: 72 columns, each a filmstrip following the engine's c<n> (its band's gain right now: flat per band,\n# filled green above 0 dB, red below). A touch moves the",
           "# nearest crossover line to that column; drag sideways to keep moving it"]
     for c in range(NCOL):
         L.append('meter cx=%d cy=%d w=%d h=%d key=c%d strip=images/curve_col.png frames=%d' % (

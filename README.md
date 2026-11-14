@@ -11,7 +11,7 @@ The sound is split into five bands (LOW, LOW MID, MID, HIGH MID, HIGH) and each 
 
 Each band has just four controls:
 - **XOVER**: where the band ends and the next one starts (bands 1-4). Turn the knob, or **touch the graph and drag a
-  dashed line sideways**: the nearest crossover follows your finger.
+  crossover line sideways**: the nearest one follows your finger.
 - **INPUT**: how hard the band is driven into its compressor. Turn it up to compress more (the threshold is fixed at
   -20 dBFS with a soft knee, so INPUT is the "amount").
 - **RATIO**: how strongly it compresses, 1:1 (none) to 20:1.
@@ -23,8 +23,10 @@ On top: **SPEED** (Fast / Medium / Slow attack and release for every band; the l
 the high ones faster, so bass doesn't distort), **MIX** (parallel compression), **MASTER**, **ANALYZER**, four colour
 **themes** and **BYPASS**.
 
-The graph shows each frequency's gain **right now**: INPUT and OUTPUT minus the compression, through the crossover. When a
-band compresses you watch its part of the curve dip, over the analyzer's view of the sound after the plugin.
+The graph shows what each band is doing to the sound **right now**, the way Logic's Multipressor does: every band is a
+flat bar across its own frequency range at its gain change (INPUT and OUTPUT minus the compression), stepping at the
+crossover lines. The bar is filled from 0 dB: **red** when the band is being pulled down (compressed), **green** when
+it is raised. Behind it, the analyzer shows the sound after the plugin.
 
 9 built-in presets: Init, Gentle Glue, Mix Bus, Drum Punch, Tight Low End, Vocal Control, De-Harsh, Loud Master,
 Parallel Squash. Q-Links: page 1 = bands 1-4 (XOVER, INPUT, RATIO, OUTPUT in a column each), page 2 = band 5, MIX,

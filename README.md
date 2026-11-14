@@ -57,10 +57,11 @@ Download `Multi-Band-Compressor-<version>-mpc.zip` from [Releases](../../release
   thread), the setting the toolchain recommends after measuring audio stalls with constantly moving meters on a Live III.
 
 ## Automation
-Your knob and switch moves are only recorded when you record automation on purpose (MPC's automation write); playing
-with the plugin on a looping track doesn't write anything. The screen's live values (gain bars, meters, analyzer) can't
-be automated at all. Before 1.0.2 the plugin reported every setting the MPC had just set back to it, which MPC recorded
-as track automation and replayed on every loop. The fix is a small patch to the toolchain's VST2 wrapper,
+Knob and switch moves are recorded when the track's automation is set to write, as with any MPC plugin. The screen's
+live values (gain bars, meters, analyzer) can't be automated at all, so writing automation records only your settings.
+Before 1.0.2 the plugin also reported every setting the MPC had just set back to it (a knob turn, a project load), and
+its display values were automatable: with automation write on, those were recorded every 100 ms and a replayed graph
+value acted as a touch, which could move a crossover. The fix is a small patch to the toolchain's VST2 wrapper,
 [patches/vst2_wrap-no-automation-echo.patch](patches/vst2_wrap-no-automation-echo.patch), which `build.sh` applies to a
 copy of it; `tests/test_automation.c` loads the built plugin as MPC does and checks it in real time.
 

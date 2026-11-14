@@ -56,6 +56,14 @@ Download `Multi-Band-Compressor-<version>-mpc.zip` from [Releases](../../release
 - The live screen (curve, meters, analyzer) is reported to MPC from a background thread of the wrapper's (not the audio
   thread), the setting the toolchain recommends after measuring audio stalls with constantly moving meters on a Live III.
 
+## Automation
+Your knob and switch moves are only recorded when you record automation on purpose (MPC's automation write); playing
+with the plugin on a looping track doesn't write anything. The screen's live values (gain bars, meters, analyzer) can't
+be automated at all. Before 1.0.2 the plugin reported every setting the MPC had just set back to it, which MPC recorded
+as track automation and replayed on every loop. The fix is a small patch to the toolchain's VST2 wrapper,
+[patches/vst2_wrap-no-automation-echo.patch](patches/vst2_wrap-no-automation-echo.patch), which `build.sh` applies to a
+copy of it; `tests/test_automation.c` loads the built plugin as MPC does and checks it in real time.
+
 ## Build
 Needs [mpc-vst-plugins](https://github.com/3dthc/mpc-vst-plugins) (Shapey's toolchain) next to this repo at commit
 `860807012d78a1b997863fae618f72d0da5945d1`, Python 3 with Pillow and Playwright (Chromium), and Zig (`pip install
@@ -79,7 +87,9 @@ SDK=<Akai SDK checkout> ./test.sh
    MIX without combing, SOLO, bit-exact BYPASS, the screen values (curve, crossover lines, meters, analyzer, graph
    drag), state save/load, no clicks from any control, silence, CPU.
 2. The toolchain's host test under AddressSanitizer / UBSan: PASSED.
-3. Akai's `host_sim`: everything passes except its state check, which also counts the display-only values (curve,
+3. `tests/test_automation.c`: knob, switch and project-load changes are never reported back as automation; the screen's
+   values are, and can't be automated; a crossover dragged on the graph moves its knob.
+4. Akai's `host_sim`: everything passes except its state check, which also counts the display-only values (curve,
    analyzer, touch glow). The engine recomputes those instead of saving them, as Shapey does; every setting comes back.
 
 ## Licence and credits

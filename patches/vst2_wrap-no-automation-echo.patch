@@ -1,0 +1,40 @@
+--- vst2_wrap.c
++++ vst2_wrap.c
+@@ -520,13 +520,27 @@
+  * synchronously and which can wait on its UI thread: a plugin whose display_rev moves all the time (meters) stalled MPC's
+  * audio workers ~20 ms every few seconds from the audio thread (measured on a Live III). DISPLAY_REV_THREAD
+  * runs this on a normal-priority thread of the wrapper's own instead (rev_thread), every 100 ms. */
++/* (multi-band-compressor patch) A param the engine draws on screen by itself: one gen_vst.py hides from hosts
++ * (PLUG_HOST_HIDDEN: curve columns, meters, analyzer, selection, theme). Only these are reported by rev_scan, and only
++ * these answer "no" to effCanBeAutomated. A setting the user turns (a knob, a switch) is never echoed back with
++ * audioMasterAutomate after the host set it, which MPC recorded as automation of the track and replayed on every loop;
++ * and display values can never be recorded and replayed into the engine. A setting the engine itself changes (a
++ * crossover dragged on the graph) is still reported, through mpc_engine_changed. */
++static int display_only(int i) {
++#ifdef PLUG_HOST_HIDDEN_COUNT
++    for (int k = 0; k < PLUG_HOST_HIDDEN_COUNT; k++) if (PLUG_HOST_HIDDEN[k] == i) return 1;
++#else
++    (void)i;
++#endif
++    return 0;
++}
+ static void rev_scan(wrap_t *w) {
+     char rev[16];
+     if (eng_get(w, "display_rev", rev, sizeof rev) > 0 && strcmp(rev, w->last_rev)) {
+         snprintf(w->last_rev, sizeof w->last_rev, "%s", rev);
+         if (!DISPLAY_REV_NO_UPDATE) w->need_update_display = 1;
+         for (int i = 0; i < NPARAMS; i++) {
+-            if (PARAMS[i].momentary || popup_is(i) || PARAMS[i].string_display) continue;
++            if (PARAMS[i].momentary || popup_is(i) || PARAMS[i].string_display || !display_only(i)) continue;
+             float v = get_norm(w, i);
+             if (fabsf(v - w->last_norm[i]) > 1e-4f) { w->last_norm[i] = v; w->master(&w->fx, audioMasterAutomate, i, 0, 0, v); }
+         }
+@@ -875,7 +889,7 @@
+     case effGetVendorString: copy_str(p, PLUG_VENDOR, 32); return 1;
+     case effGetVendorVersion: return PLUG_VERSION;
+     case effGetVstVersion: return 2400;
+-    case effCanBeAutomated: return idx >= 0 && idx < NPARAMS;
++    case effCanBeAutomated: return idx >= 0 && idx < NPARAMS && !display_only(idx);
+     case effGetParamName:
+         if (idx >= 0 && idx < NPARAMS) param_name_text(w, idx, p, 32);
+         return 1;

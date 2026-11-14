@@ -29,6 +29,10 @@ cd "$HERE"
 echo "== skin and params.h"
 "$PY" "$MV/tools/gen_vst.py" mbc/vst.json
 
+echo "== wrapper, patched (patches/: settings the host sets are never reported back as automation)"
+cp "$MV/wrapper/vst2_wrap.c" mbc/build/vst2_wrap.c
+for p in patches/*.patch; do patch -s --no-backup-if-mismatch mbc/build/vst2_wrap.c "$p"; echo "applied $p"; done
+
 echo "== binaries (zig: glibc 2.31 floor, C++ runtime linked in)"
 for T in arm32 arm64; do
   case $T in
@@ -39,7 +43,7 @@ for T in arm32 arm64; do
   "${ZIG[@]}" c++ "${TGT[@]}" -O2 -fPIC -fvisibility=hidden -std=gnu++11 -Wall -Wextra -Wno-unused-parameter \
       -Imbc/build -I"$MV/wrapper" -c src/engine.cpp -o "$OUT/obj/engine.o"
   "${ZIG[@]}" cc "${TGT[@]}" -O2 -fPIC -fvisibility=hidden -std=gnu11 -Wno-unused-parameter \
-      -Imbc/build -I"$MV/wrapper" -c "$MV/wrapper/vst2_wrap.c" -o "$OUT/obj/vst2_wrap.o"
+      -Imbc/build -I"$MV/wrapper" -c mbc/build/vst2_wrap.c -o "$OUT/obj/vst2_wrap.o"
   "${ZIG[@]}" c++ "${TGT[@]}" -shared -fPIC -s "$OUT/obj/engine.o" "$OUT/obj/vst2_wrap.o" -lm -lpthread -ldl \
       -Wl,--no-undefined -o "$OUT/$SO"
   echo "$T: $(readelf -h "$OUT/$SO" | awk -F: '/Machine/{gsub(/^ +/,"",$2);print $2}'), highest glibc" \

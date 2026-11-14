@@ -7,11 +7,13 @@
   **External Plugin Support**.
 
 ## Install
-1. Unzip. You get a folder named **`Cmackg - VST - Multi-Band Compressor`**.
+1. Unzip. You get one folder named **`Cmackg - VST - Multi-Band Compressor`** (this file is inside it).
 2. On a USB drive, an SD card or the MPC's internal drive, make a folder named **`VST2 Plugins`** at the top level, if
    there isn't one already.
-3. Copy the whole `Cmackg - VST - Multi-Band Compressor` folder into `VST2 Plugins`. Don't rename it, and don't move
-   anything out of it.
+3. Copy the `Cmackg - VST - Multi-Band Compressor` folder itself into `VST2 Plugins`. Don't rename it, don't move
+   anything out of it, and don't put it inside another folder: `plugin.json` must end up at
+   `VST2 Plugins/Cmackg - VST - Multi-Band Compressor/plugin.json`. If your computer unzipped it into an extra folder
+   (named after the zip), open that and copy the `Cmackg - VST - ...` folder from inside it.
 4. Put the drive in the MPC (or restart the MPC if you used the internal drive). Add it to a track as an insert
    effect: it's listed under **External VST Plugins** as **Multi-Band Compressor**.
 

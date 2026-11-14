@@ -1,0 +1,3 @@
+[
+  { "version": "1.0.0", "device": "MPC Live III", "firmware": "3.10.1", "date": "2026-11-14", "notes": "first quick test: loads, works as intended (installed by hand)" }
+]

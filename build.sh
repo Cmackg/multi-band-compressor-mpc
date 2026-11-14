@@ -8,8 +8,9 @@
 #   python3 with Pillow and Playwright (Chromium) for the skin, and ziglang (pip install ziglang) or zig on PATH
 #   SDK  optional: a checkout of Akai's mpc-plugin-builder-sdk, to run its validator on the result
 #
-# Output: dist/Multi-Band-Compressor-<version>-mpc.zip, one folder "Cmackg - VST - Multi-Band Compressor" with
-# plugin.json (file32 + file64), both .so files, Plugin Skins/ and version.xml. Copy the folder into "VST2 Plugins".
+# Output: dist/Multi-Band-Compressor-<version>-mpc.zip holding just one folder, "Cmackg - VST - Multi-Band Compressor",
+# with plugin.json (file32 + file64), both .so files, Plugin Skins/, version.xml and INSTALL.md. Copy that folder itself
+# into "VST2 Plugins" (VST2 Plugins/Cmackg - VST - Multi-Band Compressor/plugin.json).
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 VERSION="${1:-1.0.0}"
@@ -69,8 +70,10 @@ EOF
 mkdir -p dist
 ZIP="$HERE/dist/Multi-Band-Compressor-$VERSION-mpc.zip"
 rm -f "$ZIP"
-cp INSTALL.md "$DIR/../INSTALL.md"
-(cd "$REL/x" && zip -qr -X "$ZIP" "$(basename "$DIR")" INSTALL.md)
+# ONE top-level item: the plugin folder (install notes inside it). With anything else beside it, macOS and Windows
+# unzip into an extra wrapper folder, and copying that into "VST2 Plugins" leaves the plugin one level too deep to be found
+cp INSTALL.md "$DIR/INSTALL.md"
+(cd "$REL/x" && zip -qr -X "$ZIP" "$(basename "$DIR")")
 echo "$ZIP"
 
 if [ -n "${SDK:-}" ] && [ -f "$SDK/tools/validate.py" ]; then

@@ -36,7 +36,8 @@ MASTER, SPEED.
 Download `Multi-Band-Compressor-<version>-mpc.zip` from [Releases](../../releases) (or build it, below) and follow its
 [INSTALL.md](INSTALL.md):
 1. MPC OS 3.10.1 or later, with **Preferences → Enhancements → Enable Enhancements** and **External Plugin Support** on.
-2. Copy the folder `Cmackg - VST - Multi-Band Compressor` into a `VST2 Plugins` folder at the top of a drive.
+2. Copy the folder `Cmackg - VST - Multi-Band Compressor` itself into a `VST2 Plugins` folder at the top of a drive, so
+   that `plugin.json` is at `VST2 Plugins/Cmackg - VST - Multi-Band Compressor/plugin.json` (not one folder deeper).
 3. Insert **Multi-Band Compressor** on a track (External VST Plugins).
 
 ## How it works
@@ -50,8 +51,8 @@ Download `Multi-Band-Compressor-<version>-mpc.zip` from [Releases](../../release
 
 ## Status
 - Offline: every test passes (see Tests). CPU about 1% of one desktop core per instance with all five bands working.
-- **Not yet run on an MPC.** It is built and packaged exactly like Shapey 5-Band EQ, which is tested on an MPC Live II;
-  the 64-bit (Live III) build comes from the same source and toolchain. Please report how it behaves on your MPC.
+- **Tested on an MPC Live III, MPC OS 3.10.1** (first quick test, 2026-11-14: loads and works as intended; see
+  [tested.json](tested.json)). The 32-bit build comes from the same source and toolchain, not yet run on a 32-bit MPC.
 - The live screen (curve, meters, analyzer) is reported to MPC from a background thread of the wrapper's (not the audio
   thread), the setting the toolchain recommends after measuring audio stalls with constantly moving meters on a Live III.
 

@@ -263,6 +263,26 @@ check("crossover lines sit on their frequencies", all(abs(a - b) <= 1 for a, b i
 _, _, info = run(tone(1000, -12, 1.0), analyzer=1, **only())
 lvl = info["bars"][col(1000)] * 1.25 - 60
 check("analyzer: a 1 kHz tone at -12 dBFS reads about -12 dB at 1 kHz", abs(lvl + 12) <= 3.5, "%.1f dB" % lvl)
+# a loud, bass-heavy mix must not pin the low end to the top. Stand-in: noise with a typical mix's slope (-4.5 dB/oct
+# per hertz, 1.5 dB/oct steeper than pink) peaking near full scale; the analyzer's energy-per-column and 1.5 dB/oct
+# tilt should show it about level, mid-chart
+n = 6 * SR
+w = np.random.default_rng(11).normal(0, 1, n)
+k = np.maximum(np.arange(n // 2 + 1), 1)
+mix = np.real(np.fft.irfft(np.fft.rfft(w) * k ** -0.75, n))
+mix = 0.9 * mix / np.max(np.abs(mix))
+_, _, info = run(mix, analyzer=1, **only())
+b = info["bars"]
+lo = np.mean(b[col(30):col(150)]); hi = np.mean(b[col(2000):col(10000)])
+check("analyzer: a loud bass-heavy mix is not pinned at the top (bass under 85% of the chart)", lo < 0.85 * 48,
+      "bass %.0f%%, highs %.0f%% of the chart" % (100 * lo / 48, 100 * hi / 48))
+check("analyzer: a typical mix's spectrum reads about level (bass and highs within 6 dB)", abs(lo - hi) * 1.25 <= 6,
+      "%.1f dB apart" % (abs(lo - hi) * 1.25))
+pink = mix   # (the stop test below)
+# after the music stops every column falls back (the screen budget gives falling columns their turn too)
+_, _, info = run(np.concatenate([pink, np.zeros(5 * SR)]), analyzer=1, **only())
+check("analyzer: every column falls back to the floor after the music stops", max(info["bars"]) == 0,
+      "highest column %d of 48" % max(info["bars"]))
 
 # a touch on the graph moves the nearest crossover line there
 _, _, info = run(tone(1000, -40, 0.5), "@10:c%d=30" % col(2500))

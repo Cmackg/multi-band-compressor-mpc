@@ -48,8 +48,9 @@ Download `Multi-Band-Compressor-<version>-mpc.zip` from [Releases](../../release
 - **MIX** blends with the same bands unprocessed, so parallel compression doesn't comb.
 - Every knob glides or fades (about 10-20 ms): no clicks from any control.
 - **Screen budget.** Every value that moves on screen costs MPC's screen thread a repaint, and a screen that falls behind
-  looks frozen. The analyzer (4096-point FFT, each column read at its own frequency, 1.25 dB steps) moves at most 24 of
-  its 72 columns a picture, the ones furthest behind; the gain bars move a band only on a real change. About 360
+  looks frozen. The analyzer (4096-point FFT; each column shows the energy in its own frequency range, as a real-time
+  analyzer does, with a 1.5 dB/oct tilt so a typical mix reads about level; 1.25 dB steps) moves at most 24 of its 72
+  columns a picture, by how far off they are and how long they have waited; the gain bars move a band only on a real change. About 360
   screen reports a second with everything busy (before 1.0.3: ~960); `tests/test_automation.c` checks it stays under 450.
 - Signal flow and details: the comment at the top of [src/engine.cpp](src/engine.cpp).
 

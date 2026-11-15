@@ -63,6 +63,10 @@ static const int FFT_N = 4096;                 /* 10.8 Hz bins: the low columns 
 static const int BAR_STEPS = 48;               /* analyzer frames: 0 = nothing .. 48 = 0 dBFS, 1.25 dB a step */
 static const float BAR_FLOOR = -60.0f;
 static const float BAR_FALL = 1.5f;            /* dB an analyzer column falls per picture (~15 dB a second) */
+static const float AN_TILT = 1.5f;             /* dB per octave, pivoting at 1 kHz. Each column shows the energy in its
+                                                * own frequency range (as a real-time analyzer does), so pink noise reads
+                                                * level; a typical mix falls ~1.5 dB/oct faster than pink, and this tilt
+                                                * levels it (the same look as FabFilter's 4.5 dB/oct on single bins) */
 static const int AN_BLOCKS = 34;               /* screen pictures (analyzer, meters, live curve) every 34 blocks (~99 ms) */
 /* The screen budget. Every value that moves costs MPC's screen thread a repaint (the toolchain measured a 48-column
  * display at 10 a second, one report per column, at more than a whole core on its screen thread), and a screen that
@@ -201,6 +205,7 @@ struct Comp {
     int an_pos = 0, an_wait = 0;
     float bar_db[NBAR];
     int bar[NBAR];
+    int bar_age[NBAR];                         /* pictures a column has waited to move (fair turns under the budget) */
     int bshown[NB], bwait[NB];                 /* each band's gain bar as shown (curve step, -1 = not yet), and how long
                                                 * a small change has waited */
 };
@@ -346,7 +351,7 @@ static void *create(const char *)
     }
     for (int b = 0; b < NB; ++b) { p->b[b].rpos = lrintf(ratio_pos(2.0f)); p->grm[b] = -1; }
     for (int c = 0; c < NCOL; ++c) { p->col[c] = -1; p->col_touched[c] = 0; }
-    for (int k = 0; k < NBAR; ++k) { p->bar_db[k] = BAR_FLOOR - 20; p->bar[k] = 0; }
+    for (int k = 0; k < NBAR; ++k) { p->bar_db[k] = BAR_FLOOR - 20; p->bar[k] = 0; p->bar_age[k] = 0; }
     for (int b = 0; b < NB; ++b) { p->bshown[b] = -1; p->bwait[b] = 0; }
     for (int i = 0; i < FFT_N; ++i) p->win[i] = 0.5f - 0.5f * cosf(2.0f * (float)M_PI * i / FFT_N);
     memset(p->an_buf, 0, sizeof p->an_buf);
@@ -623,9 +628,10 @@ static void fft(float *re, float *im, int n)
 }
 
 /* the analyzer: the last FFT_N samples -> NBAR log-spaced columns. A column narrower than two FFT bins reads the power
- * interpolated at its own centre frequency (so the low columns differ, instead of several sharing one bin); a wider one
- * its loudest bin (a tone reads at its level). Rises at once, falls BAR_FALL dB a picture. Then only the AN_BUDGET
- * columns furthest from their new height move (rises first), the rest catch up on the next pictures */
+ * interpolated at its own centre frequency (so the low columns differ, instead of several sharing one bin), a wider one
+ * the energy across its range: a tone reads at its level, pink noise reads level. Tilted by AN_TILT dB an octave around 1 kHz. Rises at once, falls
+ * BAR_FALL dB a picture. Then only AN_BUDGET columns move, by how far they are off times how long they have waited,
+ * so every column gets its turn (rising and falling alike) */
 static void update_analyzer(Comp *p)
 {
     float *re = p->fre, *im = p->fim;
@@ -635,33 +641,44 @@ static void update_analyzer(Comp *p)
     }
     fft(re, im, FFT_N);
     for (int i = 0; i <= FFT_N / 2; ++i) re[i] = re[i] * re[i] + im[i] * im[i];   /* power, in place */
-    const float binhz = SR / FFT_N, norm = 4.0f / FFT_N;
+    /* a sine of amplitude A puts 3 N^2 A^2 / 32 of power into the positive bins (Hann, Parseval): read it as A^2 */
+    const float binhz = SR / FFT_N, norm = 32.0f / (3.0f * (float)FFT_N * (float)FFT_N);
     int target[NBAR], prio[NBAR], order[NBAR], n = 0;
     for (int k = 0; k < NBAR; ++k) {
         float f0 = F_LO * powf(F_HI / F_LO, (float)k / NBAR), f1 = F_LO * powf(F_HI / F_LO, (float)(k + 1) / NBAR);
-        float pw;
-        if ((f1 - f0) / binhz < 2.0f) {
-            float x = sqrtf(f0 * f1) / binhz;
+        float x0 = f0 / binhz, x1 = f1 / binhz, pw = 0.0f;
+        if (x1 - x0 < 2.0f) {
+            /* narrower than two bins: the power per bin interpolated at the column's centre, times its width in bins */
+            float x = sqrtf(x0 * x1);
             int i0 = (int)x;
             float fr = x - i0;
-            pw = re[i0] + (re[i0 + 1] - re[i0]) * fr;
+            pw = (re[i0] + (re[i0 + 1] - re[i0]) * fr) * fmaxf(x1 - x0, 1.0f);
         } else {
-            int b0 = (int)(f0 / binhz), b1 = (int)(f1 / binhz);
-            pw = 0.0f;
-            for (int b = b0; b <= b1 && b <= FFT_N / 2; ++b) pw = fmaxf(pw, re[b]);
+            /* the energy in [f0, f1): whole bins inside, and the share of the two at its edges */
+            int b0 = (int)x0, b1 = (int)x1;
+            if (b1 > FFT_N / 2) b1 = FFT_N / 2;
+            for (int b = b0; b <= b1; ++b) {
+                float lo = fmaxf(x0, (float)b - 0.5f), hi = fminf(x1, (float)b + 0.5f);
+                if (hi > lo) pw += re[b] * (hi - lo);
+            }
         }
-        float db = 10.0f * log10f(pw * norm * norm + 1e-20f);
+        float db = 10.0f * log10f(pw * norm + 1e-20f) + AN_TILT * log2f(sqrtf(f0 * f1) / 1000.0f);
         p->bar_db[k] = db > p->bar_db[k] ? db : fmaxf(db, p->bar_db[k] - BAR_FALL);
         target[k] = (int)lrintf(clampf((p->bar_db[k] - BAR_FLOOR) / -BAR_FLOOR * BAR_STEPS, 0, BAR_STEPS));
         int d = target[k] - p->bar[k];
-        if (d) { prio[k] = d > 0 ? 2 * d : -d; order[n++] = k; }
+        if (d) { prio[k] = abs(d) * (1 + p->bar_age[k]); order[n++] = k; }   /* the longer it waited, the sooner */
+        else p->bar_age[k] = 0;
     }
     for (int i = 1; i < n; ++i) {                     /* biggest moves first (insertion sort: n <= 72) */
         int k = order[i], j = i - 1;
         while (j >= 0 && prio[order[j]] < prio[k]) { order[j + 1] = order[j]; --j; }
         order[j + 1] = k;
     }
-    for (int i = 0; i < n && i < AN_BUDGET; ++i) p->bar[order[i]] = target[order[i]];
+    for (int i = 0; i < n; ++i) {
+        int k = order[i];
+        if (i < AN_BUDGET) { p->bar[k] = target[k]; p->bar_age[k] = 0; }
+        else ++p->bar_age[k];
+    }
     if (n) ++p->display_rev;
 }
 

@@ -17,6 +17,7 @@
 <path d="M0 .5H1280" stroke="#fff" stroke-opacity=".18"/><path d="M0 57.5H1280" stroke="#000" stroke-opacity=".45"/>
 <text x="24" y="22" text-anchor="start" dominant-baseline="central" style="font-family:'Titillium Web',sans-serif;font-weight:700;font-size:25px;letter-spacing:1px" fill="#14181d">MULTI-BAND</text>
 <text x="25" y="44" text-anchor="start" dominant-baseline="central" style="font-family:'Titillium Web',sans-serif;font-weight:600;font-size:12px;letter-spacing:3.2px" fill="#0a6fb0">COMPRESSOR</text>
+<text x="152" y="44" text-anchor="start" dominant-baseline="central" style="font-family:'Titillium Web',sans-serif;font-weight:600;font-size:11px;letter-spacing:0.5px" fill="#48505a">v1.0.5</text>
 <text x="350" y="30" text-anchor="start" dominant-baseline="central" style="font-family:'Titillium Web',sans-serif;font-weight:600;font-size:14px;letter-spacing:2px" fill="#48505a">SPEED</text>
 <rect x="404" y="10" width="120" height="38" rx="8" fill="#1b1f24"/><rect x="404" y="10" width="120" height="38" rx="8" fill="url(#inset)"/><rect x="404.5" y="10.5" width="119" height="37" rx="8" fill="none" stroke="#5f6770"/>
 <text x="562" y="30" text-anchor="end" dominant-baseline="central" style="font-family:'Titillium Web',sans-serif;font-weight:600;font-size:14px;letter-spacing:2px" fill="#48505a">MIX</text>

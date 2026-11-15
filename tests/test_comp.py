@@ -261,21 +261,22 @@ cols = [col(hz) + 1 for hz in (100, 400, 1600, 6000)]
 check("crossover lines sit on their frequencies", all(abs(a - b) <= 1 for a, b in zip(info["xm"], cols)),
       "%s vs %s" % (info["xm"], cols))
 _, _, info = run(tone(1000, -12, 1.0), analyzer=1, **only())
-lvl = info["bars"][col(1000)] * 1.25 - 60
+lvl = info["bars"][col(1000)] * 1.25 - 48   # the analyzer scale: -48 .. +12 dB, 1.25 dB a step
 check("analyzer: a 1 kHz tone at -12 dBFS reads about -12 dB at 1 kHz", abs(lvl + 12) <= 3.5, "%.1f dB" % lvl)
-# a loud, bass-heavy mix must not pin the low end to the top. Stand-in: noise with a typical mix's slope (-4.5 dB/oct
-# per hertz, 1.5 dB/oct steeper than pink) peaking near full scale; the analyzer's energy-per-column and 1.5 dB/oct
-# tilt should show it about level, mid-chart
+# a loud, finished mix must sit about mid-chart, not at the top. Stand-in: noise with a typical mix's slope
+# (-4.5 dB/oct per hertz, 1.5 dB/oct steeper than pink) at a hot master's level, -9 dBFS RMS
 n = 6 * SR
 w = np.random.default_rng(11).normal(0, 1, n)
-k = np.maximum(np.arange(n // 2 + 1), 1)
-mix = np.real(np.fft.irfft(np.fft.rfft(w) * k ** -0.75, n))
-mix = 0.9 * mix / np.max(np.abs(mix))
+fq = np.fft.rfftfreq(n, 1 / SR)
+shape = np.where((fq >= 30) & (fq <= 16000), np.maximum(fq, 30) ** -0.75, 0.0)   # music's range: 30 Hz .. 16 kHz
+mix = np.real(np.fft.irfft(np.fft.rfft(w) * shape, n))
+mix = 10 ** (-9 / 20) * mix / np.sqrt(np.mean(mix ** 2))
+mix = np.clip(mix, -1, 1)
 _, _, info = run(mix, analyzer=1, **only())
 b = info["bars"]
-lo = np.mean(b[col(30):col(150)]); hi = np.mean(b[col(2000):col(10000)])
-check("analyzer: a loud bass-heavy mix is not pinned at the top (bass under 85% of the chart)", lo < 0.85 * 48,
-      "bass %.0f%%, highs %.0f%% of the chart" % (100 * lo / 48, 100 * hi / 48))
+lo = np.mean(b[col(30):col(150)]); hi = np.mean(b[col(2000):col(10000)]); avg = np.mean(b[col(25):col(16000)])
+check("analyzer: a hot mix (-9 dBFS RMS) sits about mid-chart (35-70%), none at the top",
+      0.35 * 48 <= avg <= 0.70 * 48 and max(b) < 48, "average %.0f%%, highest column %.0f%%" % (100 * avg / 48, 100 * max(b) / 48))
 check("analyzer: a typical mix's spectrum reads about level (bass and highs within 6 dB)", abs(lo - hi) * 1.25 <= 6,
       "%.1f dB apart" % (abs(lo - hi) * 1.25))
 pink = mix   # (the stop test below)

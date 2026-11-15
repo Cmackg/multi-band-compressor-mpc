@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build Multi-Band Compressor: skin, both MPC binaries, and the MPC OS 3.10.1 plugin folder (zip) for every MPC.
 #
-#   ./build.sh [version]          e.g. ./build.sh 1.0.0   (default: 1.0.0)
+#   ./build.sh [version]          e.g. ./build.sh 1.0.5   (default: the VERSION file; it is also drawn in the skin's header)
 #
 # Needs (no Docker):
 #   MV   a checkout of github.com/3dthc/mpc-vst-plugins at the commit in TOOLCHAIN_REF (default: ../mpc-vst-plugins)
@@ -13,7 +13,7 @@
 # into "VST2 Plugins" (VST2 Plugins/Cmackg - VST - Multi-Band Compressor/plugin.json).
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-VERSION="${1:-1.0.0}"
+VERSION="${1:-$(cat "$HERE/VERSION")}"
 MV="${MV:-$HERE/../mpc-vst-plugins}"
 TOOLCHAIN_REF=860807012d78a1b997863fae618f72d0da5945d1     # the mpc-vst-plugins commit Shapey EQ releases with
 PY="${PYTHON:-python3}"
@@ -25,6 +25,9 @@ if command -v zig >/dev/null; then ZIG=(zig); else ZIG=("$PY" -m ziglang); fi
 SO=multi_band_compressor.so
 SKIN="mbc/build/skin/Cmackg - VST - Multi-Band Compressor"
 cd "$HERE"
+
+echo "== skin artwork (the version in the header: $VERSION)"
+MBC_VERSION="$VERSION" "$PY" tools/make_skin_art.py
 
 echo "== skin and params.h"
 "$PY" "$MV/tools/gen_vst.py" mbc/vst.json

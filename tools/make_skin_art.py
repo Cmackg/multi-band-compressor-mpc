@@ -19,6 +19,8 @@ VST = os.path.join(HERE, "..", "mbc")
 # Titillium Web from the mpc-vst-plugins toolchain checkout (MV, default ../mpc-vst-plugins next to this repo)
 MV = os.environ.get("MV") or os.path.join(HERE, "..", "..", "mpc-vst-plugins")
 FONT = os.environ.get("MBC_FONTS") or os.path.join(MV, "tools", "html_art", "fonts")
+# the version shown in the header (the repo's VERSION file; build.sh redraws the skin with it)
+VERSION_TEXT = os.environ.get("MBC_VERSION") or open(os.path.join(HERE, "..", "VERSION")).read().strip()
 # ---------------------------------------------------------------- themes
 # f0/f1: gradient stops. nat/sharp: (face0, face1, stroke, ink) for a lit and an unlit key. led_*: the lit key's bar.
 BASE = dict(amber=("#f2a33a", "#ffc76e", "#1d1407"))
@@ -230,7 +232,7 @@ GRAPH = (16, 62, 1248, 252)                              # the display panel: x,
 NCOL, COL_W = 72, 16
 PLOT_X, PLOT_Y, PLOT_H = 72, 70, 200                     # the curve: 72 columns of 16 px from x 72, 200 px tall
 CURVE_DB, CURVE_STEPS = 18, 60                           # -18 .. +18 dB in 60 steps (frame 30 = 0 dB)
-NBAR, BAR_STEPS = 72, 48                                 # analyzer: a haze behind the curve, 72 columns, 1.25 dB steps (-60..0 dBFS)
+NBAR, BAR_STEPS = 72, 48                                 # analyzer: bars behind the gain display, 72 columns, 1.25 dB steps
 F_LO, F_HI = 20.0, 20000.0
 NX = 4
 
@@ -308,6 +310,7 @@ def background(slug, t):
     o.append('<path d="M0 .5H1280" stroke="#fff" stroke-opacity=".18"/><path d="M0 %gH1280" stroke="#000" stroke-opacity=".45"/>' % (HDR_H - .5))
     o.append(text(24, 22, TITLE[0], 25, t["ink"], 700, spacing=1))
     o.append(text(25, 44, TITLE[1], 12, t["sub"], 600, spacing=3.2))
+    o.append(text(152, 44, "v" + VERSION_TEXT, 11, t["dim"], 600, spacing=.5))   # which build is installed, at a glance
     sx, sw = SPEED_FIELD
     o.append(text(sx - 54, cy, "SPEED", 14, t["dim"]))
     o.append(field(sx, SEL_Y, sw, SEL_H, t))
@@ -436,21 +439,19 @@ def gr_strip_svg(colour):
 
 
 def bar_strip_svg():
-    """an analyzer column (Shapey's): BAR_STEPS + 1 frames of soft haze"""
+    """an analyzer column: BAR_STEPS + 1 frames (frame 0: nothing). A crisp bar: a solid body fading a little towards
+    the bottom, a bright 2 px top edge, and a 2 px gap to the next column, so the columns read as separate bars and each
+    1.25 dB step shows (the soft haze it replaced smeared at this height)"""
     w, h = NCOL * COL_W // NBAR, PLOT_H
     n = BAR_STEPS + 1
-    c = "#8fb8ff"
-    o = ['<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d">' % (w, h * n)]
+    c, edge = "#6f9fe8", "#c4dcff"
+    o = ['<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d"><defs><linearGradient id="g" x2="0" y2="1">'
+         '<stop stop-color="%s" stop-opacity=".42"/><stop offset="1" stop-color="%s" stop-opacity=".16"/></linearGradient></defs>' % (w, h * n, c, c)]
     for k in range(1, n):
-        top = k * h + 3 + (h - 6) * (1 - k / BAR_STEPS)
-        bottom = (k + 1) * h - 2
-        y0 = max(k * h, top - 14)
-        span = bottom - y0
-        edge = min(.5, max(.02, (top - y0) / span))
-        o.append('<defs><linearGradient id="g%d" x2="0" y2="1"><stop stop-color="%s" stop-opacity="0"/>'
-                 '<stop offset="%.3f" stop-color="%s" stop-opacity=".30"/><stop offset="1" stop-color="%s" stop-opacity=".05"/></linearGradient></defs>'
-                 % (k, c, edge, c, c))
-        o.append('<rect x="0" y="%.1f" width="%d" height="%.1f" fill="url(#g%d)"/>' % (y0, w, span, k))
+        top = k * h + 2 + (h - 4) * (1 - k / BAR_STEPS)
+        bottom = (k + 1) * h - 1
+        o.append('<rect x="1" y="%.1f" width="%d" height="%.1f" fill="url(#g)"/>' % (top, w - 2, bottom - top))
+        o.append('<rect x="1" y="%.1f" width="%d" height="2" fill="%s" opacity=".85"/>' % (top, w - 2, edge))
     o.append("</svg>")
     return "".join(o), w, h * n
 
@@ -544,7 +545,7 @@ def layout():
           'popup cx=%d cy=%d w=%d h=%d label="SPEED" key=speed field=none accent=eef1f4 cols=1 cw=%d options="Fast,Medium,Slow"' % (
               sx + sw // 2, SEL_Y + SEL_H // 2 + Y, sw, SEL_H, sw)]
     ax, ay, aw, ah = ANALYZER
-    L += ["", "# the analyzer: a switch in the header, and a 72-column haze behind the curve (display only)",
+    L += ["", "# the analyzer: a switch in the header, and 72 bars behind the gain display (display only)",
           'toggle cx=%d cy=%d key=analyzer label="ANALYZER" img=images/analyzer_off.png img_on=images/analyzer_on.png w=%d h=%d ns=0' % (
               ax, ay + Y, aw, ah)]
     bw_ = NCOL * COL_W // NBAR

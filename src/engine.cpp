@@ -60,8 +60,13 @@ static const int TOUCH_HOLD = 86;              /* blocks (~250 ms) a touch glow 
 static const int SNAP_HOLD = 86;               /* blocks a crossover pushed against its neighbour waits before its knob follows */
 static const int NBAR = 72;                    /* analyzer columns */
 static const int FFT_N = 4096;                 /* 10.8 Hz bins: the low columns get bins of their own */
-static const int BAR_STEPS = 48;               /* analyzer frames: 0 = nothing .. 48 = 0 dBFS, 1.25 dB a step */
-static const float BAR_FLOOR = -60.0f;
+static const int BAR_STEPS = 48;               /* analyzer frames: 0 = nothing .. 48 = the top, 1.25 dB a step */
+/* The analyzer's scale (it has no numbers of its own: the graph's dB labels are the gain bars'). A column shows the
+ * energy in its range, which for a loud, finished mix is around -10 to -25 dB, so the chart spans BAR_FLOOR .. BAR_TOP
+ * to put that mid-chart with room above for peaks. A sine at -12 dBFS reads -12 (two thirds up) */
+static const float BAR_FLOOR = -48.0f, BAR_TOP = 12.0f;
+static const float BAR_RISE = 0.6f;            /* a rising column goes this share of the way up per picture (no flicker
+                                                * to every peak: about 90% in three pictures) */
 static const float BAR_FALL = 1.5f;            /* dB an analyzer column falls per picture (~15 dB a second) */
 static const float AN_TILT = 1.5f;             /* dB per octave, pivoting at 1 kHz. Each column shows the energy in its
                                                 * own frequency range (as a real-time analyzer does), so pink noise reads
@@ -629,7 +634,7 @@ static void fft(float *re, float *im, int n)
 
 /* the analyzer: the last FFT_N samples -> NBAR log-spaced columns. A column narrower than two FFT bins reads the power
  * interpolated at its own centre frequency (so the low columns differ, instead of several sharing one bin), a wider one
- * the energy across its range: a tone reads at its level, pink noise reads level. Tilted by AN_TILT dB an octave around 1 kHz. Rises at once, falls
+ * the energy across its range: a tone reads at its level, pink noise reads level. Tilted by AN_TILT dB an octave around 1 kHz. Rises BAR_RISE of the way a picture, falls
  * BAR_FALL dB a picture. Then only AN_BUDGET columns move, by how far they are off times how long they have waited,
  * so every column gets its turn (rising and falling alike) */
 static void update_analyzer(Comp *p)
@@ -663,8 +668,9 @@ static void update_analyzer(Comp *p)
             }
         }
         float db = 10.0f * log10f(pw * norm + 1e-20f) + AN_TILT * log2f(sqrtf(f0 * f1) / 1000.0f);
-        p->bar_db[k] = db > p->bar_db[k] ? db : fmaxf(db, p->bar_db[k] - BAR_FALL);
-        target[k] = (int)lrintf(clampf((p->bar_db[k] - BAR_FLOOR) / -BAR_FLOOR * BAR_STEPS, 0, BAR_STEPS));
+        if (p->bar_db[k] < BAR_FLOOR - 10) p->bar_db[k] = BAR_FLOOR - 10;
+        p->bar_db[k] = db > p->bar_db[k] ? p->bar_db[k] + (db - p->bar_db[k]) * BAR_RISE : fmaxf(db, p->bar_db[k] - BAR_FALL);
+        target[k] = (int)lrintf(clampf((p->bar_db[k] - BAR_FLOOR) / (BAR_TOP - BAR_FLOOR) * BAR_STEPS, 0, BAR_STEPS));
         int d = target[k] - p->bar[k];
         if (d) { prio[k] = abs(d) * (1 + p->bar_age[k]); order[n++] = k; }   /* the longer it waited, the sooner */
         else p->bar_age[k] = 0;

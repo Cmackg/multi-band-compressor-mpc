@@ -1,3 +1,4 @@
 [
-  { "version": "1.0.0", "device": "MPC Live III", "firmware": "3.10.1", "date": "2026-11-14", "notes": "quick tests: loads, works as intended (installed by hand); gain-reduction meters and gain display move as expected" }
+  {"version": "1.0.5", "device": "MPC Live III", "firmware": "3.10.1", "date": "2026-11-15", "notes": "analyzer keeps running, crisp bars mid-chart on a playing mix; gain bars and meters follow the compression"},
+  {"version": "1.0.0", "device": "MPC Live III", "firmware": "3.10.1", "date": "2026-11-14", "notes": "quick tests: loads, works as intended (installed by hand); gain-reduction meters and gain display move as expected"}
 ]

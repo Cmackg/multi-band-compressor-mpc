@@ -8,7 +8,8 @@
  *     must report nothing for any setting;
  *   - the display values (curve, meters, analyzer) must keep being reported (that is how the screen moves), and must
  *     answer "no" to effCanBeAutomated so they can't be recorded and replayed into the engine;
- *   - a crossover dragged on the graph is the engine moving a setting itself: it is reported, so its knob follows.
+ *   - a crossover dragged on the graph is the engine moving a setting itself: it is reported, so its knob follows;
+ *   - the screen stays within its budget of reports a second (each one is a repaint on MPC's screen thread).
  * Prints PASS / FAIL lines and exits 1 on any failure. */
 #include <dlfcn.h>
 #include <math.h>
@@ -165,6 +166,15 @@ int main(int argc, char **argv)
     check("knob and switch changes are not reported back (not recorded)", n == 0, n ? msg : "none reported");
     snprintf(msg, sizeof msg, "%d reports", reported_display());
     check("the screen still moves: display values reported", reported_display() > 50, msg);
+
+    /* the screen budget: every report costs MPC's screen thread a repaint, and a screen that falls behind looks frozen.
+     * Loud, busy audio with the analyzer on, 5 s in real time (before the budget: ~960 reports a second) */
+    e->setParameter(e, index_of("analyzer"), 1.0f);
+    play(e, 0.5);
+    memset(automated, 0, sizeof automated);
+    play(e, 5.0);
+    snprintf(msg, sizeof msg, "%.0f reports a second (analyzer, gain bars, meters)", reported_display() / 5.0);
+    check("screen budget: at most 450 display reports a second", reported_display() / 5.0 <= 450, msg);
 
     /* 2. MPC's nudge of parameter 0 (MIX) at prepare, and a project load */
     memset(automated, 0, sizeof automated);

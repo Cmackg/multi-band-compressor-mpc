@@ -261,7 +261,7 @@ cols = [col(hz) + 1 for hz in (100, 400, 1600, 6000)]
 check("crossover lines sit on their frequencies", all(abs(a - b) <= 1 for a, b in zip(info["xm"], cols)),
       "%s vs %s" % (info["xm"], cols))
 _, _, info = run(tone(1000, -12, 1.0), analyzer=1, **only())
-lvl = info["bars"][col(1000)] * 2.5 - 60
+lvl = info["bars"][col(1000)] * 1.25 - 60
 check("analyzer: a 1 kHz tone at -12 dBFS reads about -12 dB at 1 kHz", abs(lvl + 12) <= 3.5, "%.1f dB" % lvl)
 
 # a touch on the graph moves the nearest crossover line there

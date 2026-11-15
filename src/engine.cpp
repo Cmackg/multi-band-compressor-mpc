@@ -59,10 +59,21 @@ static const int DEF_SEL = 2;                  /* selected at first: the middle 
 static const int TOUCH_HOLD = 86;              /* blocks (~250 ms) a touch glow stays after the finger's last move */
 static const int SNAP_HOLD = 86;               /* blocks a crossover pushed against its neighbour waits before its knob follows */
 static const int NBAR = 72;                    /* analyzer columns */
-static const int FFT_N = 2048;
-static const int BAR_STEPS = 24;               /* analyzer frames: 0 = nothing .. 24 = 0 dBFS, 2.5 dB a step */
+static const int FFT_N = 4096;                 /* 10.8 Hz bins: the low columns get bins of their own */
+static const int BAR_STEPS = 48;               /* analyzer frames: 0 = nothing .. 48 = 0 dBFS, 1.25 dB a step */
 static const float BAR_FLOOR = -60.0f;
+static const float BAR_FALL = 1.5f;            /* dB an analyzer column falls per picture (~15 dB a second) */
 static const int AN_BLOCKS = 34;               /* screen pictures (analyzer, meters, live curve) every 34 blocks (~99 ms) */
+/* The screen budget. Every value that moves costs MPC's screen thread a repaint (the toolchain measured a 48-column
+ * display at 10 a second, one report per column, at more than a whole core on its screen thread), and a screen that
+ * falls behind looks frozen. So per picture (~10 a second) the analyzer moves at most AN_BUDGET of its columns (the
+ * ones furthest from where they should be), and the live gain bars at most LIVE_COL_BUDGET columns, a band moving only
+ * when its gain changed by GAIN_JUMP steps or more, or by less for GAIN_HOLD pictures in a row (no flicker). Edits
+ * (a knob, a crossover) redraw the bars at once, exactly. Before this, a busy mix sent ~960 reports a second. */
+static const int AN_BUDGET = 24;
+static const int LIVE_COL_BUDGET = 40;
+static const int GAIN_JUMP = 2;                /* curve steps (0.6 dB each) */
+static const int GAIN_HOLD = 3;
 static const int GR_STEPS = 24;                /* a gain-reduction meter's frames: 0 .. 24 dB, 1 dB a frame */
 static const float XGAP = 33.0f;               /* crossovers stay at least 1/3 octave apart (knob units: 100 = 1 octave) */
 static const float X_MIN = 59.0f, X_MAX = 917.0f;   /* crossovers 30 Hz .. 11 kHz */
@@ -186,9 +197,12 @@ struct Comp {
     int analyzer = 0;
     float an_buf[FFT_N];
     float fre[FFT_N], fim[FFT_N];
+    float win[FFT_N];                          /* the Hann window, made once */
     int an_pos = 0, an_wait = 0;
     float bar_db[NBAR];
     int bar[NBAR];
+    int bshown[NB], bwait[NB];                 /* each band's gain bar as shown (curve step, -1 = not yet), and how long
+                                                * a small change has waited */
 };
 
 /* where each crossover really sits: in order and at least XGAP apart, whatever order the knobs were set in. The one moved
@@ -243,23 +257,56 @@ static void update_weights(Comp *p)
     }
 }
 
-/* the curve (net gain per column) and the crossover lines; display_rev moves when any of it changed */
-static void update_curve(Comp *p)
+/* the gain bars (each band's gain right now, flat across its columns) and the crossover lines; display_rev moves when
+ * any of it changed. live: the ~10-a-second refresh while audio plays, under the screen budget; otherwise (an edit)
+ * every column is redrawn exactly */
+static int band_of_column(const Comp *p, int c)
+{
+    for (int b = 0; b < NB; ++b) if (p->wcol[c][b] > 0.5f) return b;
+    return 0;
+}
+
+static void update_curve(Comp *p, bool live)
 {
     bool moved = false;
     float mx = p->mixpct / 100.0f;
     bool any_solo = false;
     for (int b = 0; b < NB; ++b) any_solo |= p->b[b].solo != 0;
-    for (int c = 0; c < NCOL; ++c) {
-        float g = 0.0f, dry = 0.0f;
-        for (int b = 0; b < NB; ++b) {
-            float au = !any_solo || p->b[b].solo ? 1.0f : 0.0f;
-            g += p->wcol[c][b] * p->b[b].gain_now;
-            dry += p->wcol[c][b] * au;
-        }
-        g = mx * g + (1.0f - mx) * dry;
+    int target[NB], ncols[NB] = {0};
+    for (int b = 0; b < NB; ++b) {
+        float au = !any_solo || p->b[b].solo ? 1.0f : 0.0f;
+        float g = mx * p->b[b].gain_now + (1.0f - mx) * au;
         float db = p->bypass ? 0.0f : 20.0f * log10f(fmaxf(g, 1e-6f)) + p->master;
-        int v = (int)lrintf((clampf(db, -CURVE_DB, CURVE_DB) + CURVE_DB) / (2 * CURVE_DB) * CURVE_STEPS);
+        target[b] = (int)lrintf((clampf(db, -CURVE_DB, CURVE_DB) + CURVE_DB) / (2 * CURVE_DB) * CURVE_STEPS);
+    }
+    for (int c = 0; c < NCOL; ++c) ++ncols[band_of_column(p, c)];
+    bool redraw[NB];
+    if (!live) {
+        for (int b = 0; b < NB; ++b) { redraw[b] = true; p->bwait[b] = 0; }
+    } else {
+        /* the bands that need moving, biggest change first, while the column budget lasts (one band always may) */
+        int want[NB], n = 0, used = 0;
+        for (int b = 0; b < NB; ++b) {
+            redraw[b] = false;
+            int d = abs(target[b] - p->bshown[b]);
+            if (d == 0) { p->bwait[b] = 0; continue; }
+            if (p->bshown[b] < 0 || d >= GAIN_JUMP || ++p->bwait[b] >= GAIN_HOLD) want[n++] = b;
+        }
+        for (int i = 0; i < n; ++i)
+            for (int j = i + 1; j < n; ++j)
+                if (abs(target[want[j]] - p->bshown[want[j]]) > abs(target[want[i]] - p->bshown[want[i]])) {
+                    int t = want[i]; want[i] = want[j]; want[j] = t;
+                }
+        for (int i = 0; i < n; ++i) {
+            int b = want[i];
+            if (used > 0 && used + ncols[b] > LIVE_COL_BUDGET) continue;   /* next picture */
+            redraw[b] = true; used += ncols[b]; p->bwait[b] = 0;
+        }
+    }
+    for (int b = 0; b < NB; ++b) if (redraw[b]) p->bshown[b] = target[b];
+    for (int c = 0; c < NCOL; ++c) {
+        int b = band_of_column(p, c);
+        int v = p->bshown[b] < 0 ? target[b] : p->bshown[b];
         if (v != p->col[c]) { p->col[c] = v; moved = true; }
     }
     float e[NX];
@@ -300,9 +347,11 @@ static void *create(const char *)
     for (int b = 0; b < NB; ++b) { p->b[b].rpos = lrintf(ratio_pos(2.0f)); p->grm[b] = -1; }
     for (int c = 0; c < NCOL; ++c) { p->col[c] = -1; p->col_touched[c] = 0; }
     for (int k = 0; k < NBAR; ++k) { p->bar_db[k] = BAR_FLOOR - 20; p->bar[k] = 0; }
+    for (int b = 0; b < NB; ++b) { p->bshown[b] = -1; p->bwait[b] = 0; }
+    for (int i = 0; i < FFT_N; ++i) p->win[i] = 0.5f - 0.5f * cosf(2.0f * (float)M_PI * i / FFT_N);
     memset(p->an_buf, 0, sizeof p->an_buf);
     update_weights(p);
-    update_curve(p);
+    update_curve(p, false);
     update_meters(p);
     return p;
 }
@@ -573,29 +622,47 @@ static void fft(float *re, float *im, int n)
     }
 }
 
+/* the analyzer: the last FFT_N samples -> NBAR log-spaced columns. A column narrower than two FFT bins reads the power
+ * interpolated at its own centre frequency (so the low columns differ, instead of several sharing one bin); a wider one
+ * its loudest bin (a tone reads at its level). Rises at once, falls BAR_FALL dB a picture. Then only the AN_BUDGET
+ * columns furthest from their new height move (rises first), the rest catch up on the next pictures */
 static void update_analyzer(Comp *p)
 {
     float *re = p->fre, *im = p->fim;
     for (int i = 0; i < FFT_N; ++i) {
-        float w = 0.5f - 0.5f * cosf(2.0f * (float)M_PI * i / FFT_N);
-        re[i] = p->an_buf[(p->an_pos + i) & (FFT_N - 1)] * w;
+        re[i] = p->an_buf[(p->an_pos + i) & (FFT_N - 1)] * p->win[i];
         im[i] = 0.0f;
     }
     fft(re, im, FFT_N);
+    for (int i = 0; i <= FFT_N / 2; ++i) re[i] = re[i] * re[i] + im[i] * im[i];   /* power, in place */
     const float binhz = SR / FFT_N, norm = 4.0f / FFT_N;
-    bool moved = false;
+    int target[NBAR], prio[NBAR], order[NBAR], n = 0;
     for (int k = 0; k < NBAR; ++k) {
         float f0 = F_LO * powf(F_HI / F_LO, (float)k / NBAR), f1 = F_LO * powf(F_HI / F_LO, (float)(k + 1) / NBAR);
-        int b0 = (int)(f0 / binhz), b1 = (int)(f1 / binhz);
-        if (b1 < b0 + 1) b1 = b0 + 1;
-        float pw = 0.0f;
-        for (int b = b0; b <= b1 && b < FFT_N / 2; ++b) pw = fmaxf(pw, re[b] * re[b] + im[b] * im[b]);
+        float pw;
+        if ((f1 - f0) / binhz < 2.0f) {
+            float x = sqrtf(f0 * f1) / binhz;
+            int i0 = (int)x;
+            float fr = x - i0;
+            pw = re[i0] + (re[i0 + 1] - re[i0]) * fr;
+        } else {
+            int b0 = (int)(f0 / binhz), b1 = (int)(f1 / binhz);
+            pw = 0.0f;
+            for (int b = b0; b <= b1 && b <= FFT_N / 2; ++b) pw = fmaxf(pw, re[b]);
+        }
         float db = 10.0f * log10f(pw * norm * norm + 1e-20f);
-        p->bar_db[k] = db > p->bar_db[k] ? db : fmaxf(db, p->bar_db[k] - 2.5f);
-        int v = (int)lrintf(clampf((p->bar_db[k] - BAR_FLOOR) / -BAR_FLOOR * BAR_STEPS, 0, BAR_STEPS));
-        if (v != p->bar[k]) { p->bar[k] = v; moved = true; }
+        p->bar_db[k] = db > p->bar_db[k] ? db : fmaxf(db, p->bar_db[k] - BAR_FALL);
+        target[k] = (int)lrintf(clampf((p->bar_db[k] - BAR_FLOOR) / -BAR_FLOOR * BAR_STEPS, 0, BAR_STEPS));
+        int d = target[k] - p->bar[k];
+        if (d) { prio[k] = d > 0 ? 2 * d : -d; order[n++] = k; }
     }
-    if (moved) ++p->display_rev;
+    for (int i = 1; i < n; ++i) {                     /* biggest moves first (insertion sort: n <= 72) */
+        int k = order[i], j = i - 1;
+        while (j >= 0 && prio[order[j]] < prio[k]) { order[j + 1] = order[j]; --j; }
+        order[j + 1] = k;
+    }
+    for (int i = 0; i < n && i < AN_BUDGET; ++i) p->bar[order[i]] = target[order[i]];
+    if (n) ++p->display_rev;
 }
 
 /* a one-pole coefficient for a time constant in ms */
@@ -625,12 +692,12 @@ static void process(void *inst, const int16_t *in_lr, int16_t *out_lr, int frame
             }
     }
     if (p->curve_wait > 0) --p->curve_wait;
-    if (p->curve_dirty && p->curve_wait == 0) { p->curve_dirty = 0; p->curve_wait = 3; update_weights(p); update_curve(p); }
+    if (p->curve_dirty && p->curve_wait == 0) { p->curve_dirty = 0; p->curve_wait = 3; update_weights(p); update_curve(p, false); }
     if (++p->an_wait >= AN_BLOCKS) {
         p->an_wait = 0;
         if (p->analyzer) update_analyzer(p);
         update_meters(p);
-        update_curve(p);                                  /* the live curve follows the gain reduction */
+        update_curve(p, true);                            /* the live gain bars follow the compression */
     }
 
     /* ---- per-block settings ---- */

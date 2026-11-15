@@ -230,7 +230,7 @@ GRAPH = (16, 62, 1248, 252)                              # the display panel: x,
 NCOL, COL_W = 72, 16
 PLOT_X, PLOT_Y, PLOT_H = 72, 70, 200                     # the curve: 72 columns of 16 px from x 72, 200 px tall
 CURVE_DB, CURVE_STEPS = 18, 60                           # -18 .. +18 dB in 60 steps (frame 30 = 0 dB)
-NBAR, BAR_STEPS = 72, 24                                 # analyzer: a haze behind the curve
+NBAR, BAR_STEPS = 72, 48                                 # analyzer: a haze behind the curve, 72 columns, 1.25 dB steps (-60..0 dBFS)
 F_LO, F_HI = 20.0, 20000.0
 NX = 4
 
